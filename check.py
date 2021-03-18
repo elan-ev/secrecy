@@ -3,6 +3,7 @@
 from typing import List
 import os
 import re
+import subprocess
 import sys
 
 
@@ -66,14 +67,38 @@ def check_private_key(ctx: Context, content: bytes, path: str):
 
 def main():
     ctx = Context()
-    path = sys.argv[1]
 
-    check_current(ctx, path)
+    if len(sys.argv) < 2:
+        print_help()
+    elif len(sys.argv) == 2 and sys.argv[1] == "--staged":
+        check_staged(ctx)
+    elif len(sys.argv) == 2:
+        check_current(ctx, sys.argv[1])
+    else:
+        print_help()
 
     if ctx.errored:
         eprint("")
         eprint("Potentially found unencrypted secrets!")
         sys.exit(1)
+
+def print_help():
+    print("Missing argument. Usage:")
+    print("")
+    print("Checking a single given file or all files in a given directory:")
+    print("    check <path>")
+    print("")
+    print("Checking all files that are currently staged by git (useful for pre-commit hook):")
+    print("    check --staged")
+
+def check_staged(ctx: Context):
+    """Checks all files that are currently staged. Useful in pre-commit hook"""
+
+    files = subprocess.check_output(["git", "diff", "--staged", "--name-only"])
+    for file in files.splitlines():
+        filestr = file.decode()
+        content = read_file(filestr)
+        check_file(ctx, content, filestr)
 
 def check_current(ctx: Context, path: str):
     """Checks all files in 'path' in their current version (not using git)"""
