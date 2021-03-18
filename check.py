@@ -33,23 +33,26 @@ class Context:
 # ----- Actual checks trying to detect secrets -------------------------------
 
 def check_file(ctx: Context, content: bytes, path: str):
-    check_vault_filename(ctx, content, path)
-    check_var_starting_with_vault(ctx, content, path)
+    check_vault(ctx, content, path)
     check_private_key(ctx, content, path)
 
 
-def check_vault_filename(ctx: Context, content: bytes, path: str):
-    """Emits an error if the filename is "vault" but the file does not start
-    with "$ANSIBLE_VAULT"
+def check_vault(ctx: Context, content: bytes, path: str):
+    """Checks for unencrypted Ansible vaults
+
+    Emits an error if the filename is "vault" but the file does not start with
+    "$ANSIBLE_VAULT", OR if any line starts with `vault_` and has a colon in it
+    (thus resembling a variable assignment).
     """
     if os.path.basename(path) == "vault" and not content.startswith(b"$ANSIBLE_VAULT"):
         ctx.error(path, f'has filename "vault" but does not start with "$ANSIBLE_VAULT"')
+        return
 
-def check_var_starting_with_vault(ctx: Context, content: bytes, path: str):
     for lineno, line in enumerate(content.splitlines(), start=1):
         if line.startswith(b"vault_") and b":" in line:
             linestr = line.decode(errors="replace")
             ctx.line_error(path, lineno, f'looks like a vault variable definition: {linestr}')
+
 
 def check_private_key(ctx: Context, content: bytes, path: str):
     pattern = re.compile(b"-----BEGIN .+PRIVATE KEY-----")
