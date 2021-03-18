@@ -2,6 +2,7 @@
 
 from typing import List
 import os
+import re
 import sys
 
 
@@ -41,6 +42,7 @@ class Context:
 def check_file(ctx: Context, content: bytes, path: str):
     check_vault_filename(ctx, content, path)
     check_var_starting_with_vault(ctx, content, path)
+    check_private_key(ctx, content, path)
 
 
 def check_vault_filename(ctx: Context, content: bytes, path: str):
@@ -56,7 +58,12 @@ def check_var_starting_with_vault(ctx: Context, content: bytes, path: str):
             linestr = line.decode(errors="replace")
             ctx.line_error(path, lineno, f'looks like a vault variable definition: {linestr}')
 
-
+def check_private_key(ctx: Context, content: bytes, path: str):
+    pattern = re.compile(b"-----BEGIN [A-Z]+ PRIVATE KEY-----")
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        if pattern.search(line) is not None:
+            linestr = line.decode(errors="replace")
+            ctx.line_error(path, lineno, f'unencrypted private key: {linestr}')
 
 
 
