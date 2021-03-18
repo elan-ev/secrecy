@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import List
+from typing import List, Optional
 import os
 import re
 import subprocess
@@ -21,14 +21,21 @@ class Context:
     """Utility type to keep track of error state and emit errors"""
 
     errored = False
+    commit: Optional[str] = None
 
     def error(self, path: str, msg: str):
         self.errored = True
-        print(f'ERROR in {path} => {msg}', file=sys.stderr)
+        print(f'ERROR in {path}{self.commit_output()} => {msg}', file=sys.stderr)
 
     def line_error(self, path: str, line: int, msg: str):
         self.errored = True
-        print(f'ERROR in {path}:{line} => {msg}', file=sys.stderr)
+        print(f'ERROR in {path}:{line}{self.commit_output()} => {msg}', file=sys.stderr)
+
+    def commit_output(self):
+        if self.commit is not None:
+            return f' (at {self.commit})';
+        else:
+            return ""
 
 
 # ----- Actual checks trying to detect secrets -------------------------------
@@ -72,6 +79,8 @@ def main():
         print_help()
     elif len(sys.argv) == 2 and sys.argv[1] == "--staged":
         check_staged(ctx)
+    elif len(sys.argv) == 4 and sys.argv[1] == "--between":
+        check_between(ctx, sys.argv[2], sys.argv[3])
     elif len(sys.argv) == 2:
         check_current(ctx, sys.argv[1])
     else:
@@ -90,6 +99,12 @@ def print_help():
     print("")
     print("Checking all files that are currently staged by git (useful for pre-commit hook):")
     print("    check --staged")
+    print("")
+    print("Checking all files that were changed somewhere between two commits. This is")
+    print("useful for pre-receive git hooks as only checking the final files does not")
+    print("tell you if secrets are hiding somewhere in the git history. This command")
+    print("checks the commits given by this command: `git rev-list base^ target`.")
+    print("    check --between <base-commit> <target-commit>")
 
 def check_staged(ctx: Context):
     """Checks all files that are currently staged. Useful in pre-commit hook"""
@@ -99,6 +114,32 @@ def check_staged(ctx: Context):
         filestr = file.decode()
         content = read_file(filestr)
         check_file(ctx, content, filestr)
+
+def check_between(ctx: Context, base: str, target: str):
+    """Checks all files changed in all commits between the two given ones.
+
+    "Between" in the git commit graph is a bit vague. Precisely: all commits are
+    inspected that are reachable from 'target' but are not reachable from
+    'base'. This maps very nicely to the intuitive notion of "new commits" in a
+    pre-receive hook.
+    """
+
+    commits = subprocess.check_output(["git", "rev-list", f'^{base}', target])
+    for rawcommit in commits.splitlines():
+        commit = rawcommit.decode()
+
+        # Setting the commit in the context for better error message
+        ctx.commit = commit
+
+        # Receive all files that were somehow changed in that commit, excluding
+        # the files that were removed.
+        cmd = ["git", "diff", "--diff-filter=d", "--name-only", f'{commit}^', commit]
+        files = subprocess.check_output(cmd)
+        for file in files.splitlines():
+            filestr = file.decode()
+            content = subprocess.check_output(["git", "show", f'{commit}:{filestr}'])
+            check_file(ctx, content, filestr)
+
 
 def check_current(ctx: Context, path: str):
     """Checks all files in 'path' in their current version (not using git)"""
