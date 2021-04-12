@@ -63,7 +63,7 @@ def check_vault(ctx: Context, content: bytes, path: str):
 
 
 def check_private_key(ctx: Context, content: bytes, path: str):
-    pattern = re.compile(b"-----BEGIN .+PRIVATE KEY-----")
+    pattern = re.compile(b"-----BEGIN .*PRIVATE KEY-----")
     for lineno, line in enumerate(content.splitlines(), start=1):
         if pattern.search(line) is not None:
             linestr = line.decode(errors="replace")
