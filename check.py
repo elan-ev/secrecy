@@ -18,26 +18,31 @@ def read_file(path: str) -> bytes:
 def eprint(msg: str):
     print(msg, file=sys.stderr)
 
+def matches_any_pattern(path: str, patterns) -> bool:
+    if path.startswith("./"):
+        path = path[2:]
+
+    for pattern in patterns:
+        pattern = pattern[1:] if pattern.startswith("/") else f'*{pattern}'
+        if fnmatch.fnmatch(path, pattern):
+            return True
+
+    return False
+
+
 class Context:
     """Utility type to keep track of error state and emit errors"""
 
     # Configuration
     config_ignores = []
+    config_vaults = []
 
     # Runtime state
     errored = False
     commit: Optional[str] = None
 
     def is_ignored(self, path: str) -> bool:
-        if path.startswith("./"):
-            path = path[2:]
-
-        for pattern in self.config_ignores:
-            pattern = pattern[1:] if pattern.startswith("/") else f'*{pattern}'
-            if fnmatch.fnmatch(path, pattern):
-                return True
-
-        return False
+        return matches_any_pattern(path, self.config_ignores)
 
     def error(self, path: str, msg: str):
         self.errored = True
@@ -71,8 +76,19 @@ def check_vault(ctx: Context, content: bytes, path: str):
     "$ANSIBLE_VAULT", OR if any line starts with `vault_` and has a colon in it
     (thus resembling a variable assignment).
     """
-    if os.path.basename(path) == "vault" and not content.startswith(b"$ANSIBLE_VAULT"):
-        ctx.error(path, f'has filename "vault" but does not start with "$ANSIBLE_VAULT"')
+
+    is_vault_file = (
+        os.path.basename(path) == "vault" or
+        matches_any_pattern(path, ctx.config_vaults)
+    )
+
+    if is_vault_file and not content.startswith(b"$ANSIBLE_VAULT"):
+        if os.path.basename(path) == "vault":
+            ctx.error(path, f'has filename "vault" but does not start with "$ANSIBLE_VAULT"')
+        else:
+            ctx.error(path, f'is a vault file (according to the configuration)'
+                + ' but does not start with "$ANSIBLE_VAULT"')
+
         return
 
     for lineno, line in enumerate(content.splitlines(), start=1):
@@ -99,6 +115,7 @@ def main():
     config = configparser.ConfigParser()
     config.read_file(open(config_file), source=config_file)
     ctx.config_ignores = config.get("secrecy", "ignore", fallback="").strip().splitlines()
+    ctx.config_vaults = config.get("secrecy", "vaults", fallback="").strip().splitlines()
 
 
     if len(sys.argv) < 2:
