@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from typing import List, Optional
+import argparse
 import configparser
 import fnmatch
 import os
@@ -34,8 +35,8 @@ class Context:
     """Utility type to keep track of error state and emit errors"""
 
     # Configuration
-    config_ignores = []
-    config_vaults = []
+    config_ignores: List[str] = []
+    config_vaults: List[str] = []
 
     # Runtime state
     errored = False
@@ -107,27 +108,62 @@ def check_private_key(ctx: Context, content: bytes, path: str):
 
 # ----- Main: entry points ---------------------------------------------------
 
+HELP_TEXT = (
+    "Example usage:\n"
+    "\n"
+    "secrecy path <path>\n"
+    "    Checking a single given file or all files in a given directory.\n"
+    "\n"
+    "secrecy staged\n"
+    "    Checking all files that are currently staged by git (useful for pre-commit hook).\n"
+    "\n"
+    "secrecy between <base-commit> <target-commit>\n"
+    "    Checking all files that were changed somewhere between two commits. This is\n"
+    "    useful for pre-receive git hooks as only checking the final files does not\n"
+    "    tell you if secrets are hiding somewhere in the git history. This command\n"
+    "    checks the commits given by this command: `git rev-list base^ target`.\n"
+)
+
 def main():
+    # Parse CLI arguments
+    parser = argparse.ArgumentParser(prog='secrecy', epilog=HELP_TEXT,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--config", help="path to the configuration file")
+    subparsers = parser.add_subparsers(dest="cmd", required=True)
+
+    subparsers.add_parser("staged")
+    path_parser = subparsers.add_parser("path")
+    path_parser.add_argument("path", help="The path to (recursively) check")
+    between_parser = subparsers.add_parser("between")
+    between_parser.add_argument("start", help="start of the commit range to be checked")
+    between_parser.add_argument("end", help="end of the commit range to be checked")
+
+    args = parser.parse_args()
+
+
     ctx = Context()
 
     # Read configuration file
-    config_file = "secrecy.ini"
-    config = configparser.ConfigParser()
-    config.read_file(open(config_file), source=config_file)
-    ctx.config_ignores = config.get("secrecy", "ignore", fallback="").strip().splitlines()
-    ctx.config_vaults = config.get("secrecy", "vaults", fallback="").strip().splitlines()
+    config_file = args.config
+    if config_file is None and os.path.isfile("secrecy.ini"):
+        config_file = "secrecy.ini"
+
+    if config_file is not None:
+        config = configparser.ConfigParser()
+        config.read_file(open(config_file), source=config_file)
+        ctx.config_ignores = config.get("secrecy", "ignore", fallback="").strip().splitlines()
+        ctx.config_vaults = config.get("secrecy", "vaults", fallback="").strip().splitlines()
 
 
-    if len(sys.argv) < 2:
-        print_help()
-    elif len(sys.argv) == 2 and sys.argv[1] == "--staged":
+    # Dispatch subcommand
+    if args.cmd == "path":
+        check_current(ctx, args.path)
+    elif args.cmd == "staged":
         check_staged(ctx)
-    elif len(sys.argv) == 4 and sys.argv[1] == "--between":
-        check_between(ctx, sys.argv[2], sys.argv[3])
-    elif len(sys.argv) == 2:
-        check_current(ctx, sys.argv[1])
+    elif args.cmd == "between":
+        check_between(ctx, args.start, args.end)
     else:
-        print_help()
+        raise "no subcommand given"
 
     if ctx.errored:
         eprint("")
