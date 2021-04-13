@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from typing import List, Optional
+import configparser
+import fnmatch
 import os
 import re
 import subprocess
 import sys
-
 
 
 # ----- Utilities ------------------------------------------------------------
@@ -20,8 +21,23 @@ def eprint(msg: str):
 class Context:
     """Utility type to keep track of error state and emit errors"""
 
+    # Configuration
+    config_ignores = []
+
+    # Runtime state
     errored = False
     commit: Optional[str] = None
+
+    def is_ignored(self, path: str) -> bool:
+        if path.startswith("./"):
+            path = path[2:]
+
+        for pattern in self.config_ignores:
+            pattern = pattern[1:] if pattern.startswith("/") else f'*{pattern}'
+            if fnmatch.fnmatch(path, pattern):
+                return True
+
+        return False
 
     def error(self, path: str, msg: str):
         self.errored = True
@@ -41,6 +57,9 @@ class Context:
 # ----- Actual checks trying to detect secrets -------------------------------
 
 def check_file(ctx: Context, content: bytes, path: str):
+    if ctx.is_ignored(path):
+        return
+
     check_vault(ctx, content, path)
     check_private_key(ctx, content, path)
 
@@ -74,6 +93,13 @@ def check_private_key(ctx: Context, content: bytes, path: str):
 
 def main():
     ctx = Context()
+
+    # Read configuration file
+    config_file = "secrecy.ini"
+    config = configparser.ConfigParser()
+    config.read_file(open(config_file), source=config_file)
+    ctx.config_ignores = config.get("secrecy", "ignore", fallback="").strip().splitlines()
+
 
     if len(sys.argv) < 2:
         print_help()
@@ -145,6 +171,10 @@ def check_current(ctx: Context, path: str):
     """Checks all files in 'path' in their current version (not using git)"""
 
     if os.path.isfile(path):
+        if ctx.is_ignored(path):
+            eprint(f'The file you specified ({path}) is ignored by the configuration')
+            return
+
         content = read_file(path)
         check_file(ctx, content, path)
     else:
