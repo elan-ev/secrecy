@@ -1,6 +1,15 @@
 # Secrecy: simple script to detect secrets
 
-WIP
+`secrecy.py` is a simple standalone script to check for accidentally leaked secrets.
+It is mostly intended to be used in repositories containing ansible scripts and has a few simple tests to catch the most common mistakes.
+It is suitable to be used in git hooks and CI.
+A full range of commits can be tested to make sure no secrets are hiding somewhere in your git history.
+
+There is certainly more involved software with more sophisticated checks.
+For example, see [Yelp/detect-secrets](https://github.com/Yelp/detect-secrets).
+This `secrecy` script is rather intended to be used as something very simple to catch common mistakes;
+something that you can simply copy into your repository.
+The script only requires `python3` and `git`.
 
 
 ## Git Hooks
