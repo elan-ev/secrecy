@@ -99,7 +99,9 @@ def check_vault(ctx: Context, content: bytes, path: str):
 
 
 def check_private_key(ctx: Context, content: bytes, path: str):
-    pattern = re.compile(b"-----BEGIN .*PRIVATE KEY-----")
+    # We use the strange `-{5}` syntax instead of writing out `-----` to prevent
+    # this regex to match itself.
+    pattern = re.compile(b"-{5}BEGIN .*PRIVATE KEY-{5}")
     for lineno, line in enumerate(content.splitlines(), start=1):
         if pattern.search(line) is not None:
             linestr = line.decode(errors="replace")
