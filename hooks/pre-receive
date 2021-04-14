@@ -1,0 +1,34 @@
+#!/bin/sh
+
+set -eux
+
+z40=0000000000000000000000000000000000000000
+
+
+while read -r oldrev newrev refname; do
+    echo "old: " $oldrev
+    echo "new: " $newrev
+    echo "name: " $refname
+
+    # Handle deleted branches
+    if [ "$newrev" = $z40 ]
+    then
+        continue
+    fi
+
+    # For new branches, use the merge base with the main branch. If the new
+    # branch is completely independent of the main branch, we just have to check
+    # all commits.
+    base="$oldrev"
+    if [ "$oldrev" = $z40 ]
+    then
+        echo "newbranch"
+        base=$(git merge-base HEAD $newrev || git rev-list --max-parents=0 $newrev)
+    fi
+
+
+    echo "base: " $base
+    echo "-----------"
+done
+
+exit 1
