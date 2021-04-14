@@ -1,0 +1,12 @@
+# Sample file on how your GitLab CI runner config might look like to run
+# secrecy. Note that a pre-receive hook would be better to prevent pushes. But
+# in case you cannot use that hook, using CI, you at least notice when a secret
+# was pushed.
+
+check-secrets:
+  stage: test
+  script:
+    # If you are using alpine linux as image, you have to install these
+    # dependencies.
+    #- apk add --update --no-cache python3 git
+    - ./gitlab.sh
