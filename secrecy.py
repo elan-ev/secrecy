@@ -176,7 +176,7 @@ def main():
 def check_staged(ctx: Context):
     """Checks all files that are currently staged. Useful in pre-commit hook"""
 
-    files = subprocess.check_output(["git", "diff", "--staged", "--name-only"])
+    files = subprocess.check_output(["git", "diff", "--diff-filter=d", "--staged", "--name-only"])
     for file in files.splitlines():
         filestr = file.decode()
         content = read_file(filestr)
