@@ -172,20 +172,6 @@ def main():
         eprint("Potentially found unencrypted secrets!")
         sys.exit(1)
 
-def print_help():
-    print("Missing argument. Usage:")
-    print("")
-    print("Checking a single given file or all files in a given directory:")
-    print("    check <path>")
-    print("")
-    print("Checking all files that are currently staged by git (useful for pre-commit hook):")
-    print("    check --staged")
-    print("")
-    print("Checking all files that were changed somewhere between two commits. This is")
-    print("useful for pre-receive git hooks as only checking the final files does not")
-    print("tell you if secrets are hiding somewhere in the git history. This command")
-    print("checks the commits given by this command: `git rev-list base^ target`.")
-    print("    check --between <base-commit> <target-commit>")
 
 def check_staged(ctx: Context):
     """Checks all files that are currently staged. Useful in pre-commit hook"""
